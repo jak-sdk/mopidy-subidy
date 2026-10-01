@@ -7,30 +7,31 @@ workflows:
   version: 2
   test:
     jobs:
-      - py38
-      - py37
+      - py312
+      - py311
       - black
       - check-manifest
       - flake8
 
 jobs:
-  py38: &test-template
+  py312: &test-template
     docker:
-      - image: mopidy/ci-python:3.8
+      - image: cimg/python:3.12
     steps:
       - checkout
       - restore_cache:
           name: Restoring tox cache
-          key: tox-v1-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.cfg" }}
+          key: tox-v1-{{ .Environment.CIRCLE_JOB }}-{{ checksum "pyproject.toml" }}
       - run:
           name: Run tests
           command: |
+            pip install tox
             tox -e $CIRCLE_JOB -- \
               --junit-xml=test-results/pytest/results.xml \
               --cov-report=xml
       - save_cache:
           name: Saving tox cache
-          key: tox-v1-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.cfg" }}
+          key: tox-v1-{{ .Environment.CIRCLE_JOB }}-{{ checksum "pyproject.toml" }}
           paths:
             - ./.tox
             - ~/.cache/pip
@@ -39,10 +40,10 @@ jobs:
       - store_test_results:
           path: test-results
 
-  py37:
+  py311:
     <<: *test-template
     docker:
-      - image: mopidy/ci-python:3.7
+      - image: cimg/python:3.11
 
   black: *test-template
 

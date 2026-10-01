@@ -1,17 +1,100 @@
-[build-system]
-requires = ["setuptools >= 30.3.0", "wheel"]
+[project]
+name = "Mopidy-Subidy"
+description = "Subsonic extension for Mopidy"
+readme = "README.rst"
+requires-python = ">=3.9"
+license = "BSD-3-Clause"
+authors = [{ name = "prior99", email = "fgnodtke@cronosx.de" }]
+classifiers = [
+    "Environment :: No Input/Output (Daemon)",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Sound/Audio :: Players",
+]
+version = "1.1.0"
+dependencies = [
+    "Mopidy >= 3.0.0, < 4",
+    "Pykka >= 2.0.1",
+    "py-sonic >= 0.7.7",
+    # Mopidy 3 still imports pkg_resources (removed in setuptools 82+)
+    "setuptools >= 60, < 81",
+]
 
+[project.urls]
+Homepage = "https://github.com/Prior99/mopidy-subidy"
+
+[project.entry-points."mopidy.ext"]
+subidy = "mopidy_subidy:SubidyExtension"
+
+[build-system]
+requires = ["setuptools >= 61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+    { include-group = "lint" },
+    { include-group = "release" },
+    { include-group = "test" },
+]
+lint = [
+    "black",
+    "check-manifest",
+    "flake8",
+    "flake8-bugbear",
+    "flake8-import-order",
+    "isort",
+]
+release = [
+    "build",
+    "twine",
+]
+test = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.setuptools.packages.find]
+include = ["mopidy_subidy*"]
+exclude = ["tests", "tests.*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.conf"]
 
 [tool.black]
-target-version = ["py37", "py38"]
+target-version = ["py39", "py310", "py311", "py312"]
 line-length = 80
 
-
 [tool.isort]
+profile = "black"
 multi_line_output = 3
 include_trailing_comma = true
 force_grid_wrap = 0
 use_parentheses = true
-line_length = 88
-known_tests = "tests"
-sections = "FUTURE,STDLIB,THIRDPARTY,FIRSTPARTY,TESTS,LOCALFOLDER"
+line_length = 80
+known_first_party = ["mopidy_subidy"]
+known_tests = ["tests"]
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "TESTS", "LOCALFOLDER"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source_pkgs = ["mopidy_subidy"]
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.check-manifest]
+ignore = [
+    ".circleci",
+    ".circleci/*",
+    ".gitignore",
+    ".python-version",
+    "uv.lock",
+]

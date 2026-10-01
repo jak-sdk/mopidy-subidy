@@ -1,10 +1,12 @@
 import pathlib
-
-import pkg_resources
+from importlib.metadata import PackageNotFoundError, version
 
 from mopidy import config, ext
 
-__version__ = pkg_resources.get_distribution("Mopidy-Subidy").version
+try:
+    __version__ = version("Mopidy-Subidy")
+except PackageNotFoundError:  # pragma: no cover
+    __version__ = "0.0.0+local"
 
 
 class SubidyExtension(ext.Extension):

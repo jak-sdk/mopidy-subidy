@@ -1,15 +1,9 @@
-include *.py
 include *.rst
-include .mailmap
 include LICENSE
-include MANIFEST.in
 include pyproject.toml
 include tox.ini
+include .flake8
 
-recursive-include .circleci *
-recursive-include .github *
-
-include mopidy_*/ext.conf
+include mopidy_subidy/ext.conf
 
 recursive-include tests *.py
-recursive-include tests/data *

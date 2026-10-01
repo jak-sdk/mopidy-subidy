@@ -27,9 +27,13 @@ Install the latest release from PyPI by running::
 
     python3 -m pip install Mopidy-Subidy
 
-Install the development version directly from this repo by running::
+Or with `uv <https://docs.astral.sh/uv/>`_::
 
-    python3 -m pip install https://github.com/Prior99/mopidy-subidy/archive/master.zip
+    uv pip install Mopidy-Subidy
+
+For local development, clone the repo and sync the environment::
+
+    uv sync --group dev
 
 See https://mopidy.com/ext/subidy/ for alternative installation methods.
 

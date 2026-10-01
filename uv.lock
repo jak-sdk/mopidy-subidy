@@ -724,7 +724,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "mopidy", specifier = ">=4.0.0" },
-    { name = "py-sonic", specifier = ">=0.7.7" },
+    { name = "py-sonic", git = "https://github.com/jak-sdk/py-sonic.git?rev=158f0f4104fb1f3c917ed30f282ece1de35494b7" },
     { name = "pykka", specifier = ">=4.1" },
 ]
 
@@ -849,8 +849,7 @@ wheels = [
 [[package]]
 name = "py-sonic"
 version = "1.1.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ce/a1/c458ca52c6e18eb0fc139fb0b5641f06ddce1050f97da8935d7d2ebfbaa3/py_sonic-1.1.2.tar.gz", hash = "sha256:5b3ca04cf61caaa89f1762b6d437ccc386e300b5609464b730e8a3617c1bd1d9", size = 35939, upload-time = "2026-04-18T21:46:12.8Z" }
+source = { git = "https://github.com/jak-sdk/py-sonic.git?rev=158f0f4104fb1f3c917ed30f282ece1de35494b7#158f0f4104fb1f3c917ed30f282ece1de35494b7" }
 
 [[package]]
 name = "pycairo"

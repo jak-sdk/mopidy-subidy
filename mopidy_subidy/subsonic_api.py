@@ -1,5 +1,6 @@
 import logging
 import re
+import urllib.error
 from urllib.parse import urlencode, urlparse
 
 import libsonic
@@ -40,9 +41,39 @@ def diritem_sort_key(item):
     return (isdir, key)
 
 
+def _host_header(hostname, scheme, port):
+    """Host header without default :80/:443 ports.
+
+    py-sonic always puts the port in the request URL, so urllib would otherwise
+    send ``Host: example.com:443``. Many reverse proxies then fail virtual-host
+    matching. See py-sonic's "A Note About Proxies".
+    """
+    if not hostname:
+        return None
+    if (scheme == "https" and port == 443) or (scheme == "http" and port == 80):
+        return hostname
+    return f"{hostname}:{port}"
+
+
+def _format_request_error(exc):
+    if isinstance(exc, urllib.error.HTTPError):
+        return (
+            f"{type(exc).__name__}: HTTP Error {exc.code}: {exc.reason}"
+            f" ({exc.url})"
+        )
+    return f"{type(exc).__name__}: {exc}"
+
+
 class SubsonicApi:
     def __init__(
-        self, url, username, password, app_name, legacy_auth, api_version
+        self,
+        url,
+        username,
+        password,
+        app_name,
+        legacy_auth,
+        api_version,
+        insecure=False,
     ):
         parsed = urlparse(url)
         self.port = (
@@ -51,28 +82,95 @@ class SubsonicApi:
             else 443 if parsed.scheme == "https" else 80
         )
         base_url = parsed.scheme + "://" + parsed.hostname
+        path = (parsed.path or "").rstrip("/")
+        server_path = f"{path}/rest" if path else "/rest"
+        insecure = bool(insecure)
+        host_header = _host_header(parsed.hostname, parsed.scheme, self.port)
         self.connection = libsonic.Connection(
             base_url,
             username,
             password,
             self.port,
-            parsed.path + "/rest",
+            server_path,
             appName=app_name,
-            legacyAuth=legacy_auth,
-            apiVersion=api_version,
+            legacyAuth=bool(legacy_auth),
+            apiVersion=api_version or "1.14.0",
+            insecure=insecure,
+            customHeaders={"Host": host_header} if host_header else None,
         )
-        self.url = url + "/rest"
+        self.url = f"{url.rstrip('/')}/rest"
         self.username = username
         self.password = password
         logger.info(
-            f"Connecting to subsonic server on url {url} as user {username}, "
-            f"API version {api_version}"
+            "Connecting to Subsonic at %s as user %s (API %s, insecure=%s)",
+            url,
+            username,
+            api_version,
+            insecure,
         )
+        self._ping(url)
+
+    def _ping(self, url):
+        # libsonic.Connection.ping() swallows exceptions and only returns False.
         try:
-            self.connection.ping()
-        except Exception as e:
-            logger.error("Unable to reach subsonic server: %s" % e)
-            exit()
+            alive = self.connection.ping()
+        except Exception as exc:
+            logger.error(
+                "Unable to reach Subsonic server at %s: %s",
+                url,
+                _format_request_error(exc),
+            )
+            logger.debug("Subsonic ping traceback", exc_info=True)
+            return
+        if alive:
+            logger.info("Subsonic ping ok for %s", url)
+            return
+        # Repeat the request ourselves so the real network/SSL error is logged.
+        try:
+            req = self.connection._getRequest("ping.view")
+            logger.debug("Subsonic ping URL: %s", req.full_url)
+            self.connection._doInfoReq(req)
+        except Exception as exc:
+            logger.error(
+                "Unable to reach Subsonic server at %s: %s",
+                url,
+                _format_request_error(exc),
+            )
+            logger.debug("Subsonic ping traceback", exc_info=True)
+        else:
+            logger.error(
+                "Unable to reach Subsonic server at %s: ping failed",
+                url,
+            )
+
+    @staticmethod
+    def _warn_request_failed(action, exc):
+        logger.warning(
+            "Subsonic request failed when %s: %s: %s",
+            action,
+            type(exc).__name__,
+            exc,
+        )
+        logger.debug(
+            "Subsonic request traceback when %s", action, exc_info=True
+        )
+
+    @staticmethod
+    def _warn_bad_status(action, response):
+        error = (response or {}).get("error") or {}
+        logger.warning(
+            "Subsonic returned status %r when %s (code=%s, message=%s)",
+            (response or {}).get("status"),
+            action,
+            error.get("code"),
+            error.get("message"),
+        )
+
+    def _is_ok(self, response, action):
+        if response is not None and response.get("status") == RESPONSE_OK:
+            return True
+        self._warn_bad_status(action, response)
+        return False
 
     def get_subsonic_uri(self, view_name, params, censor=False):
         di_params = {}
@@ -108,14 +206,10 @@ class SubsonicApi:
                 MAX_SEARCH_RESULTS if not exclude_songs else 0,
                 0,
             )
-        except Exception:
-            logger.warning("Connecting to subsonic failed when searching.")
+        except Exception as exc:
+            self._warn_request_failed("searching", exc)
             return None
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "searching"):
             return None
         return response.get("searchResult3")
 
@@ -148,32 +242,20 @@ class SubsonicApi:
     def create_playlist_raw(self, name):
         try:
             response = self.connection.createPlaylist(name=name)
-        except Exception:
-            logger.warning(
-                "Connecting to subsonic failed when creating playlist."
-            )
+        except Exception as exc:
+            self._warn_request_failed("creating playlist", exc)
             return None
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "creating playlist"):
             return None
         return response
 
     def delete_playlist_raw(self, playlist_id):
         try:
             response = self.connection.deletePlaylist(playlist_id)
-        except Exception:
-            logger.warning(
-                "Connecting to subsonic failed when deleting playlist."
-            )
+        except Exception as exc:
+            self._warn_request_failed("deleting playlist", exc)
             return None
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "deleting playlist"):
             return None
         return response
 
@@ -182,32 +264,20 @@ class SubsonicApi:
             response = self.connection.createPlaylist(
                 playlist_id, songIds=song_ids
             )
-        except Exception:
-            logger.warning(
-                "Connecting to subsonic failed when creating playlist."
-            )
+        except Exception as exc:
+            self._warn_request_failed("creating playlist", exc)
             return None
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "creating playlist"):
             return None
         return response
 
     def get_raw_artists(self):
         try:
             response = self.connection.getArtists()
-        except Exception:
-            logger.warning(
-                "Connecting to subsonic failed when loading list of artists."
-            )
+        except Exception as exc:
+            self._warn_request_failed("loading list of artists", exc)
             return []
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "loading list of artists"):
             return []
         letters = response.get("artists").get("index")
         if letters is not None:
@@ -225,16 +295,10 @@ class SubsonicApi:
     def get_raw_rootdirs(self):
         try:
             response = self.connection.getIndexes()
-        except Exception:
-            logger.warning(
-                "Connecting to subsonic failed when loading list of rootdirs."
-            )
+        except Exception as exc:
+            self._warn_request_failed("loading list of rootdirs", exc)
             return []
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "loading list of rootdirs"):
             return []
         letters = response.get("indexes").get("index")
         if letters is not None:
@@ -252,16 +316,10 @@ class SubsonicApi:
     def get_song_by_id(self, song_id):
         try:
             response = self.connection.getSong(song_id)
-        except Exception:
-            logger.warning(
-                "Connecting to subsonic failed when loading song by id."
-            )
+        except Exception as exc:
+            self._warn_request_failed("loading song by id", exc)
             return None
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "loading song by id"):
             return None
         return (
             self.raw_song_to_track(response.get("song"))
@@ -272,16 +330,10 @@ class SubsonicApi:
     def get_album_by_id(self, album_id):
         try:
             response = self.connection.getAlbum(album_id)
-        except Exception:
-            logger.warning(
-                "Connecting to subsonic failed when loading album by id."
-            )
+        except Exception as exc:
+            self._warn_request_failed("loading album by id", exc)
             return None
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "loading album by id"):
             return None
         return (
             self.raw_album_to_album(response.get("album"))
@@ -292,16 +344,10 @@ class SubsonicApi:
     def get_artist_by_id(self, artist_id):
         try:
             response = self.connection.getArtist(artist_id)
-        except Exception:
-            logger.warning(
-                "Connecting to subsonic failed when loading artist by id."
-            )
+        except Exception as exc:
+            self._warn_request_failed("loading artist by id", exc)
             return None
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "loading artist by id"):
             return None
         return (
             self.raw_artist_to_artist(response.get("artist"))
@@ -312,16 +358,10 @@ class SubsonicApi:
     def get_raw_playlists(self):
         try:
             response = self.connection.getPlaylists()
-        except Exception:
-            logger.warning(
-                "Connecting to subsonic failed when loading list of playlists."
-            )
+        except Exception as exc:
+            self._warn_request_failed("loading list of playlists", exc)
             return []
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "loading list of playlists"):
             return []
         playlists = response.get("playlists").get("playlist")
         if playlists is None:
@@ -334,32 +374,20 @@ class SubsonicApi:
     def get_raw_playlist(self, playlist_id):
         try:
             response = self.connection.getPlaylist(playlist_id)
-        except Exception:
-            logger.warning(
-                "Connecting to subsonic failed when loading playlist."
-            )
+        except Exception as exc:
+            self._warn_request_failed("loading playlist", exc)
             return None
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "loading playlist"):
             return None
         return response.get("playlist")
 
     def get_raw_dir(self, parent_id):
         try:
             response = self.connection.getMusicDirectory(parent_id)
-        except Exception:
-            logger.warning(
-                "Connecting to subsonic failed when listing content of music directory."
-            )
+        except Exception as exc:
+            self._warn_request_failed("listing content of music directory", exc)
             return None
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "listing content of music directory"):
             return None
         directory = response.get("directory")
         if directory is not None:
@@ -370,16 +398,10 @@ class SubsonicApi:
     def get_raw_albums(self, artist_id):
         try:
             response = self.connection.getArtist(artist_id)
-        except Exception:
-            logger.warning(
-                "Connecting to subsonic failed when loading list of albums."
-            )
+        except Exception as exc:
+            self._warn_request_failed("loading list of albums", exc)
             return []
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "loading list of albums"):
             return []
         albums = response.get("artist").get("album")
         if albums is not None:
@@ -392,16 +414,10 @@ class SubsonicApi:
     def get_raw_songs(self, album_id):
         try:
             response = self.connection.getAlbum(album_id)
-        except Exception:
-            logger.warning(
-                "Connecting to subsonic failed when loading list of songs in album."
-            )
+        except Exception as exc:
+            self._warn_request_failed("loading list of songs in album", exc)
             return []
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "loading list of songs in album"):
             return []
         songs = response.get("album").get("song")
         if songs is not None:
@@ -411,16 +427,10 @@ class SubsonicApi:
     def get_raw_random_song(self, size=MAX_LIST_RESULTS):
         try:
             response = self.connection.getRandomSongs(size)
-        except Exception:
-            logger.warning(
-                "Connecting to subsonic failed when loading ramdom song list."
-            )
+        except Exception as exc:
+            self._warn_request_failed("loading ramdom song list", exc)
             return []
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "loading ramdom song list"):
             return []
         songs = response.get("randomSongs").get("song")
         if songs is not None:
@@ -432,16 +442,10 @@ class SubsonicApi:
             response = self.connection.getAlbumList2(
                 ltype=ltype, size=size, offset=offset
             )
-        except Exception:
-            logger.warning(
-                "Connecting to subsonic failed when loading album list."
-            )
+        except Exception as exc:
+            self._warn_request_failed("loading album list", exc)
             return []
-        if response.get("status") != RESPONSE_OK:
-            logger.warning(
-                "Got non-okay status code from subsonic: %s"
-                % response.get("status")
-            )
+        if not self._is_ok(response, "loading album list"):
             return []
         albums = response.get("albumList2").get("album")
         if albums is not None:

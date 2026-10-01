@@ -62,6 +62,9 @@ In addition, the following optional configuration values are supported:
 - ``api_version`` -- Defaults to ``1.14.0``, which is the version used by
   Subsonic 6.2.
 
+- ``insecure`` -- Defaults to ``false``. Set to ``true`` to skip TLS certificate
+  verification (for example self-signed or hostname-mismatched certificates).
+
 
 State of this plugin
 ====================

@@ -2,7 +2,7 @@ from mopidy.models import Track
 
 from mopidy_subidy import SubidyExtension
 from mopidy_subidy.library import SubidyLibraryProvider
-from mopidy_subidy.subsonic_api import SubsonicApi
+from mopidy_subidy.subsonic_api import SubsonicApi, _host_header
 
 
 def test_get_default_config():
@@ -12,6 +12,7 @@ def test_get_default_config():
 
     assert "[subidy]" in config
     assert "enabled = true" in config
+    assert "insecure = no" in config
 
 
 def test_get_config_schema():
@@ -22,6 +23,7 @@ def test_get_config_schema():
     assert "url" in schema
     assert "username" in schema
     assert "password" in schema
+    assert "insecure" in schema
 
 
 def test_lookup_many_unknown_uri_returns_empty_list():
@@ -47,3 +49,15 @@ def test_raw_song_to_track_handles_missing_optional_fields():
     assert track.date is None
     assert track.album.uri is None
     assert next(iter(track.artists)).uri is None
+
+
+def test_host_header_omits_default_https_port():
+    assert _host_header("subsonic.example.com", "https", 443) == (
+        "subsonic.example.com"
+    )
+
+
+def test_host_header_keeps_explicit_port():
+    assert _host_header("subsonic.example.com", "https", 8443) == (
+        "subsonic.example.com:8443"
+    )

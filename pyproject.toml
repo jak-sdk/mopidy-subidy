@@ -18,7 +18,9 @@ version = "2.0.0"
 dependencies = [
     "Mopidy >= 4.0.0",
     "Pykka >= 4.1",
-    "py-sonic >= 0.7.7",
+    # Fork that restores insecure/SSL opener wiring; switch back to PyPI once
+    # https://github.com/crustymonkey/py-sonic/pull/40 is released.
+    "py-sonic @ git+https://github.com/jak-sdk/py-sonic.git@158f0f4104fb1f3c917ed30f282ece1de35494b7",
 ]
 
 [project.urls]

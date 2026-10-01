@@ -31,7 +31,7 @@ class SubidyPlaylistsProvider(backend.PlaylistsProvider):
 
     def delete(self, playlist_uri):
         playlist_id = uri.get_playlist_id(playlist_uri)
-        self.subsonic_api.delete_playlist_raw(playlist_id)
+        return self.subsonic_api.delete_playlist_raw(playlist_id) is not None
 
     def get_items(self, items_uri):
         return self.subsonic_api.get_playlist_as_songs_as_refs(

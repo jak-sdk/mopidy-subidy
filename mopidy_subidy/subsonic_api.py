@@ -48,9 +48,7 @@ class SubsonicApi:
         self.port = (
             parsed.port
             if parsed.port
-            else 443
-            if parsed.scheme == "https"
-            else 80
+            else 443 if parsed.scheme == "https" else 80
         )
         base_url = parsed.scheme + "://" + parsed.hostname
         self.connection = libsonic.Connection(
@@ -582,28 +580,35 @@ class SubsonicApi:
     def raw_song_to_track(self, song):
         if song is None:
             return None
+        artist_id = song.get("artistId")
+        album_id = song.get("albumId")
+        year = song.get("year")
         return Track(
             name=song.get("title") or UNKNOWN_SONG,
             uri=uri.get_song_uri(song.get("id")),
-            bitrate=song.get("bitRate"),
-            track_no=int(song.get("track")) if song.get("track") else None,
-            date=str(song.get("year")) or "none",
+            bitrate=int(song["bitRate"]) if song.get("bitRate") else None,
+            track_no=int(song["track"]) if song.get("track") else None,
+            date=str(year) if year else None,
             genre=song.get("genre"),
-            length=int(song.get("duration")) * 1000
-            if song.get("duration")
-            else None,
-            disc_no=int(song.get("discNumber"))
-            if song.get("discNumber")
-            else None,
-            artists=[
-                Artist(
-                    name=song.get("artist"),
-                    uri=uri.get_artist_uri(song.get("artistId")),
-                )
-            ],
+            length=(
+                int(song["duration"]) * 1000
+                if song.get("duration") is not None
+                else None
+            ),
+            disc_no=int(song["discNumber"]) if song.get("discNumber") else None,
+            artists=frozenset(
+                [
+                    Artist(
+                        name=song.get("artist"),
+                        uri=(
+                            uri.get_artist_uri(artist_id) if artist_id else None
+                        ),
+                    )
+                ]
+            ),
             album=Album(
                 name=song.get("album"),
-                uri=uri.get_album_uri(song.get("albumId")),
+                uri=uri.get_album_uri(album_id) if album_id else None,
             ),
         )
 
@@ -618,16 +623,21 @@ class SubsonicApi:
     def raw_album_to_album(self, album):
         if album is None:
             return None
+        artist_id = album.get("artistId")
         return Album(
             name=album.get("title") or album.get("name") or UNKNOWN_ALBUM,
             num_tracks=album.get("songCount"),
             uri=uri.get_album_uri(album.get("id")),
-            artists=[
-                Artist(
-                    name=album.get("artist"),
-                    uri=uri.get_artist_uri(album.get("artistId")),
-                )
-            ],
+            artists=frozenset(
+                [
+                    Artist(
+                        name=album.get("artist"),
+                        uri=(
+                            uri.get_artist_uri(artist_id) if artist_id else None
+                        ),
+                    )
+                ]
+            ),
         )
 
     def raw_directory_to_ref(self, directory):

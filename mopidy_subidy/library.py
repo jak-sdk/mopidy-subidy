@@ -126,15 +126,12 @@ class SubidyLibraryProvider(backend.LibraryProvider):
             return self.lookup_song(uri.get_song_id(lookup_uri))
         if type == uri.PLAYLIST:
             return self.lookup_playlist(uri.get_playlist_id(lookup_uri))
+        return []
 
-    def lookup(self, uri=None, uris=None):
-        if uris is not None:
-            return {uri: self.lookup_one(uri) for uri in uris}
-        if uri is not None:
-            return self.lookup_one(uri)
-        return None
+    def lookup_many(self, uris):
+        return {lookup_uri: self.lookup_one(lookup_uri) for lookup_uri in uris}
 
-    def refresh(self, uri):
+    def refresh(self, uri=None):
         pass
 
     def search_by_artist_album_and_track(
@@ -174,18 +171,19 @@ class SubidyLibraryProvider(backend.LibraryProvider):
             )
         return SearchResult(uri=uri.get_search_uri(artist_name), tracks=tracks)
 
-    def get_distinct(self, field, query):
+    def get_distinct(self, field, query=None):
         search_result = self.search(query)
         if not search_result:
-            return []
-        if field == "track" or field == "title":
-            return [track.name for track in (search_result.tracks or [])]
+            return set()
+        if field == "track" or field == "title" or field == "track_name":
+            return {track.name for track in (search_result.tracks or [])}
         if field == "album":
-            return [album.name for album in (search_result.albums or [])]
+            return {album.name for album in (search_result.albums or [])}
         if field == "artist":
             if not search_result.artists:
-                return [artist.name for artist in self.browse_artists()]
-            return [artist.name for artist in search_result.artists]
+                return {artist.name for artist in self.browse_artists()}
+            return {artist.name for artist in search_result.artists}
+        return set()
 
     def search(self, query=None, uris=None, exact=False):
         if "artist" in query and "album" in query and "track_name" in query:

@@ -7,16 +7,16 @@ workflows:
   version: 2
   test:
     jobs:
-      - py312
-      - py311
+      - py314
+      - py313
       - black
       - check-manifest
       - flake8
 
 jobs:
-  py312: &test-template
+  py314: &test-template
     docker:
-      - image: cimg/python:3.12
+      - image: cimg/python:3.14
     steps:
       - checkout
       - restore_cache:
@@ -40,10 +40,10 @@ jobs:
       - store_test_results:
           path: test-results
 
-  py311:
+  py313:
     <<: *test-template
     docker:
-      - image: cimg/python:3.11
+      - image: cimg/python:3.13
 
   black: *test-template
 

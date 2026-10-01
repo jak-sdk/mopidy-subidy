@@ -2,7 +2,7 @@
 name = "Mopidy-Subidy"
 description = "Subsonic extension for Mopidy"
 readme = "README.rst"
-requires-python = ">=3.9"
+requires-python = ">=3.13"
 license = "BSD-3-Clause"
 authors = [{ name = "prior99", email = "fgnodtke@cronosx.de" }]
 classifiers = [
@@ -10,20 +10,15 @@ classifiers = [
     "Intended Audience :: End Users/Desktop",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Multimedia :: Sound/Audio :: Players",
 ]
-version = "1.1.0"
+version = "2.0.0"
 dependencies = [
-    "Mopidy >= 3.0.0, < 4",
-    "Pykka >= 2.0.1",
+    "Mopidy >= 4.0.0",
+    "Pykka >= 4.1",
     "py-sonic >= 0.7.7",
-    # Mopidy 3 still imports pkg_resources (removed in setuptools 82+)
-    "setuptools >= 60, < 81",
 ]
 
 [project.urls]
@@ -67,7 +62,7 @@ exclude = ["tests", "tests.*"]
 "*" = ["*.conf"]
 
 [tool.black]
-target-version = ["py39", "py310", "py311", "py312"]
+target-version = ["py313"]
 line-length = 80
 
 [tool.isort]

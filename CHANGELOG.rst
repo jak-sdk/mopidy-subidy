@@ -3,6 +3,17 @@ Changelog
 *********
 
 
+v2.0.0 (2026-10-01)
+===================
+
+- Require Mopidy 4.0 or newer and Python 3.13 or newer.
+
+- Implement ``LibraryProvider.lookup_many()`` for Mopidy 4.
+
+- Fix track/album model construction for Pydantic validation (invalid
+  ``date`` values and missing artist/album IDs).
+
+
 v1.0.0 (2020-03-13)
 ===================
 

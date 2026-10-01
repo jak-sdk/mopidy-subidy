@@ -23,6 +23,8 @@ A Subsonic backend for Mopidy using `py-sonic
 Installation
 ============
 
+Requires Mopidy 4.0 or newer and Python 3.13 or newer.
+
 Install the latest release from PyPI by running::
 
     python3 -m pip install Mopidy-Subidy
